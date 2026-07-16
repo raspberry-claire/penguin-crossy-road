@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penguin Crossy Road</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-header">
+            <h1>🐧 Penguin Crossy Road 🐧</h1>
+            <div class="game-stats">
+                <div class="stat">
+                    <span class="stat-label">Score:</span>
+                    <span class="stat-value" id="score">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">High Score:</span>
+                    <span class="stat-value" id="highScore">0</span>
+                </div>
+            </div>
+        </div>
+        
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="game-over-screen" id="gameOverScreen">
+            <div class="game-over-content">
+                <h2>Game Over! 🦅</h2>
+                <p>The eagle caught you!</p>
+                <div class="final-stats">
+                    <p>Final Score: <span id="finalScore">0</span></p>
+                    <p>High Score: <span id="gameOverHighScore">0</span></p>
+                </div>
+                <button id="restartBtn">Play Again</button>
+            </div>
+        </div>
+        
+        <div class="controls-info">
+            <h3>Controls</h3>
+            <div class="controls-desktop">
+                <p><strong>Desktop:</strong> Arrow keys to move | Spacebar to move forward</p>
+            </div>
+            <div class="controls-mobile">
+                <p><strong>Mobile:</strong> Swipe to move | Tap to move forward</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
