@@ -20,6 +20,15 @@ const DIRECTION = {
     NONE: { x: 0, y: 0 }
 };
 
+// Row types
+const ROW_TYPE = {
+    SAFE: 'safe',
+    ROAD: 'road',
+    RIVER: 'river',
+    TRAIN: 'train',
+    OBSTACLES: 'obstacles'
+};
+
 class Penguin {
     constructor() {
         this.x = Math.floor(CANVAS_WIDTH / 2 / BLOCK_SIZE);
@@ -376,6 +385,9 @@ class Game {
 
         this.spawnDistance = 0;
         this.cameraY = 0;
+        
+        // Track row types for rendering
+        this.rowTypes = new Map();
 
         this.setupControls();
         this.initializeGame();
@@ -452,7 +464,7 @@ class Game {
 
     initializeGame() {
         // Generate initial terrain
-        for (let y = 0; y < Math.ceil(CANVAS_HEIGHT / BLOCK_SIZE); y++) {
+        for (let y = -Math.ceil(CANVAS_HEIGHT / BLOCK_SIZE); y < Math.ceil(CANVAS_HEIGHT / BLOCK_SIZE); y++) {
             this.generateRow(y);
         }
     }
@@ -462,6 +474,7 @@ class Game {
 
         if (rand < 0.2) {
             // Road with cars
+            this.rowTypes.set(y, ROW_TYPE.ROAD);
             const direction = Math.random() > 0.5 ? 1 : -1;
             const speed = 1 + Math.random() * 1.5;
             const carCount = 2 + Math.floor(Math.random() * 2);
@@ -472,6 +485,7 @@ class Game {
             }
         } else if (rand < 0.35) {
             // River with ice chunks
+            this.rowTypes.set(y, ROW_TYPE.RIVER);
             const direction = Math.random() > 0.5 ? 1 : -1;
             const speed = 1 + Math.random();
             const iceCount = 2 + Math.floor(Math.random() * 2);
@@ -489,19 +503,23 @@ class Game {
             }
         } else if (rand < 0.45) {
             // Train tracks with train
+            this.rowTypes.set(y, ROW_TYPE.TRAIN);
             if (Math.random() < 0.3) {
                 this.trains.push(new Train(y));
             }
         } else if (rand < 0.65) {
             // Natural obstacles
+            this.rowTypes.set(y, ROW_TYPE.OBSTACLES);
             for (let x = 0; x < CANVAS_WIDTH / BLOCK_SIZE; x++) {
                 if (Math.random() < 0.15) {
                     const type = Math.random() > 0.5 ? 'rock' : 'tree';
                     this.obstacles.push(new Obstacle(x, y, type));
                 }
             }
+        } else {
+            // Safe terrain
+            this.rowTypes.set(y, ROW_TYPE.SAFE);
         }
-        // Else: safe terrain
     }
 
     update() {
@@ -511,16 +529,13 @@ class Game {
         this.penguin.update();
 
         // Update score based on forward movement
-        const newScore = Math.max(0, Math.floor(CANVAS_HEIGHT / 2 / BLOCK_SIZE - this.penguin.y));
+        const newScore = Math.max(0, -this.penguin.y);
         if (newScore > this.score) {
             this.score = newScore;
             if (this.score > this.maxScore) {
                 this.maxScore = this.score;
             }
         }
-
-        // Update camera
-        this.cameraY = Math.max(0, this.penguin.y - 4);
 
         // Spawn eagle if time exceeded
         if (!this.eagleSpawned && Date.now() - this.gameStartTime > EAGLE_SPAWN_TIME) {
@@ -555,8 +570,8 @@ class Game {
 
         // Generate new rows as penguin moves
         if (this.penguin.y < 5) {
-            for (let i = 0; i < 5; i++) {
-                this.generateRow(-5 + i);
+            for (let i = 0; i < 10; i++) {
+                this.generateRow(this.penguin.y - 10 - i);
             }
         }
 
@@ -624,27 +639,263 @@ class Game {
     }
 
     draw() {
-        // Clear canvas
+        // Clear canvas with sky
         this.ctx.fillStyle = '#87CEEB';
-        this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-        // Draw ground/snow
-        this.ctx.fillStyle = '#E8F4F8';
         this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
         this.ctx.save();
 
-        // Draw game elements
-        this.penguin.draw(this.ctx);
+        // Draw rows based on camera position
+        const startY = Math.floor(this.penguin.y - CANVAS_HEIGHT / BLOCK_SIZE / 2);
+        const endY = Math.ceil(this.penguin.y + CANVAS_HEIGHT / BLOCK_SIZE / 2);
 
-        this.cars.forEach(car => car.draw(this.ctx));
-        this.trains.forEach(train => train.draw(this.ctx));
-        this.iceChunks.forEach(ice => ice.draw(this.ctx));
-        this.seals.forEach(seal => seal.draw(this.ctx));
-        this.obstacles.forEach(obstacle => obstacle.draw(this.ctx));
+        for (let y = startY; y <= endY; y++) {
+            const screenY = (y - this.penguin.y) * BLOCK_SIZE + CANVAS_HEIGHT / 2;
+            
+            if (screenY >= -BLOCK_SIZE && screenY <= CANVAS_HEIGHT) {
+                const rowType = this.rowTypes.get(y) || ROW_TYPE.SAFE;
+
+                if (rowType === ROW_TYPE.ROAD) {
+                    // Draw grey road
+                    this.ctx.fillStyle = '#A9A9A9';
+                    this.ctx.fillRect(0, screenY, CANVAS_WIDTH, BLOCK_SIZE);
+                    // Road markings
+                    this.ctx.strokeStyle = '#FFFFFF';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.setLineDash([10, 10]);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, screenY + BLOCK_SIZE / 2);
+                    this.ctx.lineTo(CANVAS_WIDTH, screenY + BLOCK_SIZE / 2);
+                    this.ctx.stroke();
+                    this.ctx.setLineDash([]);
+                } else if (rowType === ROW_TYPE.RIVER) {
+                    // Draw dark blue river
+                    this.ctx.fillStyle = '#1E90FF';
+                    this.ctx.fillRect(0, screenY, CANVAS_WIDTH, BLOCK_SIZE);
+                    // Water ripples effect
+                    this.ctx.strokeStyle = '#4169E1';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.setLineDash([5, 5]);
+                    for (let x = 0; x < CANVAS_WIDTH; x += 40) {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(x, screenY);
+                        this.ctx.lineTo(x + 20, screenY + BLOCK_SIZE);
+                        this.ctx.stroke();
+                    }
+                    this.ctx.setLineDash([]);
+                } else if (rowType === ROW_TYPE.TRAIN) {
+                    // Draw grey train tracks
+                    this.ctx.fillStyle = '#808080';
+                    this.ctx.fillRect(0, screenY, CANVAS_WIDTH, BLOCK_SIZE);
+                    // Track ties
+                    this.ctx.strokeStyle = '#696969';
+                    this.ctx.lineWidth = 2;
+                    for (let i = 0; i < CANVAS_WIDTH; i += 20) {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(i, screenY + 10);
+                        this.ctx.lineTo(i, screenY + BLOCK_SIZE - 10);
+                        this.ctx.stroke();
+                    }
+                    // Rails
+                    this.ctx.strokeStyle = '#555555';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, screenY + 12);
+                    this.ctx.lineTo(CANVAS_WIDTH, screenY + 12);
+                    this.ctx.stroke();
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, screenY + BLOCK_SIZE - 12);
+                    this.ctx.lineTo(CANVAS_WIDTH, screenY + BLOCK_SIZE - 12);
+                    this.ctx.stroke();
+                } else {
+                    // Draw safe snow terrain
+                    this.ctx.fillStyle = '#E8F4F8';
+                    this.ctx.fillRect(0, screenY, CANVAS_WIDTH, BLOCK_SIZE);
+                }
+            }
+        }
+
+        // Draw penguin in center of screen
+        const penguinScreenX = this.penguin.x * BLOCK_SIZE;
+        const penguinScreenY = CANVAS_HEIGHT / 2;
+        this.ctx.save();
+        this.ctx.translate(0, 0);
+        
+        // Draw penguin at screen center
+        const px = penguinScreenX;
+        const py = penguinScreenY;
+
+        // Body (black)
+        this.ctx.fillStyle = '#000000';
+        this.ctx.fillRect(px + 5, py + 5, BLOCK_SIZE - 10, BLOCK_SIZE - 10);
+
+        // Belly (white)
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.fillRect(px + 10, py + 12, BLOCK_SIZE - 20, BLOCK_SIZE - 20);
+
+        // Eyes (white)
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.fillRect(px + 12, py + 10, 5, 5);
+        this.ctx.fillRect(px + 23, py + 10, 5, 5);
+
+        // Pupils (black)
+        this.ctx.fillStyle = '#000000';
+        this.ctx.fillRect(px + 13, py + 11, 3, 3);
+        this.ctx.fillRect(px + 24, py + 11, 3, 3);
+
+        // Beak (orange)
+        this.ctx.fillStyle = '#FFA500';
+        this.ctx.fillRect(px + 16, py + 22, 8, 4);
+        
+        this.ctx.restore();
+
+        // Draw cars, trains, ice, seals, obstacles with camera offset
+        this.cars.forEach(car => {
+            const screenCarY = (car.y - this.penguin.y) * BLOCK_SIZE + CANVAS_HEIGHT / 2;
+            if (screenCarY >= -BLOCK_SIZE && screenCarY <= CANVAS_HEIGHT) {
+                const carPx = car.x * BLOCK_SIZE;
+                const carPy = screenCarY;
+                
+                // Car body (red)
+                this.ctx.fillStyle = '#FF4444';
+                this.ctx.fillRect(carPx, carPy + 5, car.width * BLOCK_SIZE, BLOCK_SIZE - 10);
+
+                // Windows (light blue)
+                this.ctx.fillStyle = '#87CEEB';
+                this.ctx.fillRect(carPx + 3, carPy + 10, 10, 8);
+                this.ctx.fillRect(carPx + 15, carPy + 10, 10, 8);
+            }
+        });
+
+        this.trains.forEach(train => {
+            const screenTrainY = (train.y - this.penguin.y) * BLOCK_SIZE + CANVAS_HEIGHT / 2;
+            if (screenTrainY >= -BLOCK_SIZE && screenTrainY <= CANVAS_HEIGHT) {
+                train.draw(this.ctx);
+            }
+        });
+
+        this.iceChunks.forEach(ice => {
+            const screenIceY = (ice.y - this.penguin.y) * BLOCK_SIZE + CANVAS_HEIGHT / 2;
+            if (screenIceY >= -BLOCK_SIZE && screenIceY <= CANVAS_HEIGHT) {
+                const icePx = ice.x * BLOCK_SIZE;
+                const icePy = screenIceY;
+
+                // Ice chunk (light blue)
+                this.ctx.fillStyle = '#B0E0E6';
+                this.ctx.fillRect(icePx, icePy + 5, ice.width * BLOCK_SIZE, BLOCK_SIZE - 10);
+
+                // Frost effect
+                this.ctx.strokeStyle = '#E0FFFF';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(icePx + 2, icePy + 7, ice.width * BLOCK_SIZE - 4, BLOCK_SIZE - 14);
+            }
+        });
+
+        this.seals.forEach(seal => {
+            const screenSealY = (seal.y - this.penguin.y) * BLOCK_SIZE + CANVAS_HEIGHT / 2;
+            if (screenSealY >= -BLOCK_SIZE && screenSealY <= CANVAS_HEIGHT) {
+                const sealPx = seal.x * BLOCK_SIZE;
+                const sealPy = screenSealY;
+
+                // Seal body (gray)
+                this.ctx.fillStyle = '#808080';
+                this.ctx.beginPath();
+                this.ctx.ellipse(sealPx + BLOCK_SIZE / 2, sealPy + BLOCK_SIZE / 2, BLOCK_SIZE / 2.5, BLOCK_SIZE / 3, 0, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                // Head (darker gray)
+                this.ctx.fillStyle = '#606060';
+                this.ctx.beginPath();
+                this.ctx.ellipse(sealPx + BLOCK_SIZE / 2.5, sealPy + BLOCK_SIZE / 3, BLOCK_SIZE / 4, BLOCK_SIZE / 4, 0, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                // Eyes (white)
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.fillRect(sealPx + BLOCK_SIZE / 4, sealPy + BLOCK_SIZE / 4, 4, 4);
+                this.ctx.fillRect(sealPx + BLOCK_SIZE / 2 + 2, sealPy + BLOCK_SIZE / 4, 4, 4);
+
+                // Pupils
+                this.ctx.fillStyle = '#000000';
+                this.ctx.fillRect(sealPx + BLOCK_SIZE / 4 + 1, sealPy + BLOCK_SIZE / 4 + 1, 2, 2);
+                this.ctx.fillRect(sealPx + BLOCK_SIZE / 2 + 3, sealPy + BLOCK_SIZE / 4 + 1, 2, 2);
+            }
+        });
+
+        this.obstacles.forEach(obstacle => {
+            const screenObstacleY = (obstacle.y - this.penguin.y) * BLOCK_SIZE + CANVAS_HEIGHT / 2;
+            if (screenObstacleY >= -BLOCK_SIZE && screenObstacleY <= CANVAS_HEIGHT) {
+                const obsPx = obstacle.x * BLOCK_SIZE;
+                const obsPy = screenObstacleY;
+
+                if (obstacle.type === 'rock') {
+                    // Rock (gray with snow)
+                    this.ctx.fillStyle = '#A9A9A9';
+                    this.ctx.fillRect(obsPx + 8, obsPy + 10, BLOCK_SIZE - 16, BLOCK_SIZE - 20);
+                    
+                    // Snow on top
+                    this.ctx.fillStyle = '#FFFFFF';
+                    this.ctx.fillRect(obsPx + 8, obsPy + 8, BLOCK_SIZE - 16, 4);
+                } else if (obstacle.type === 'tree') {
+                    // Tree trunk (brown)
+                    this.ctx.fillStyle = '#8B4513';
+                    this.ctx.fillRect(obsPx + 14, obsPy + 20, BLOCK_SIZE - 28, BLOCK_SIZE - 20);
+
+                    // Tree (green with snow)
+                    this.ctx.fillStyle = '#228B22';
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(obsPx + BLOCK_SIZE / 2, obsPy + 5);
+                    this.ctx.lineTo(obsPx + 8, obsPy + 20);
+                    this.ctx.lineTo(obsPx + BLOCK_SIZE - 8, obsPy + 20);
+                    this.ctx.closePath();
+                    this.ctx.fill();
+
+                    // Snow on tree
+                    this.ctx.fillStyle = '#FFFFFF';
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(obsPx + BLOCK_SIZE / 2, obsPy + 7);
+                    this.ctx.lineTo(obsPx + 12, obsPy + 18);
+                    this.ctx.lineTo(obsPx + BLOCK_SIZE - 12, obsPy + 18);
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                }
+            }
+        });
 
         if (this.eagle) {
-            this.eagle.draw(this.ctx);
+            const screenEagleY = (this.eagle.y - this.penguin.y) + CANVAS_HEIGHT / 2;
+            if (screenEagleY >= -50 && screenEagleY <= CANVAS_HEIGHT) {
+                this.ctx.save();
+                this.ctx.translate(this.eagle.x, screenEagleY);
+
+                // Eagle body (brown)
+                this.ctx.fillStyle = '#8B4513';
+                this.ctx.fillRect(-10, -5, 20, 15);
+
+                // Head (darker brown)
+                this.ctx.fillStyle = '#654321';
+                this.ctx.beginPath();
+                this.ctx.ellipse(8, -3, 8, 7, 0, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                // Eye (yellow)
+                this.ctx.fillStyle = '#FFFF00';
+                this.ctx.fillRect(12, -5, 4, 4);
+
+                // Beak (orange)
+                this.ctx.fillStyle = '#FF8C00';
+                this.ctx.fillRect(16, -3, 5, 3);
+
+                // Wings (brown)
+                this.ctx.fillStyle = '#654321';
+                this.ctx.beginPath();
+                this.ctx.ellipse(-15, 2, 15, 8, -0.3, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.beginPath();
+                this.ctx.ellipse(15, 2, 15, 8, 0.3, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                this.ctx.restore();
+            }
         }
 
         // Draw danger warning if eagle is near
@@ -683,6 +934,8 @@ class Game {
 
         this.spawnDistance = 0;
         this.cameraY = 0;
+        
+        this.rowTypes.clear();
 
         document.getElementById('gameOverScreen').classList.remove('show');
 
